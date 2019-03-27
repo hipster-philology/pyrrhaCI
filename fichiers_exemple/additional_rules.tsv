@@ -1,0 +1,3 @@
+Index	Type	CATin	CATout	VALin	VALout
+1	allowed_only	POS  	MORPH   	CONcoo  	MORPH=empty
+2	forbidden	POS 	MORPH 	PROind 	PERS\.=

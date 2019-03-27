@@ -1,0 +1,8 @@
+ignore:
+- "AllowedLemma:8:Estre5 est particulier au projet"
+- "AllowedMorph:9:Autorise NOMB.=s|GENRE=m|CAS=n|TEMPS=pst"
+- "1:12:Autorise autre chose que Morph=Empty sur le token de malgré sa POS=PRE"
+additional_rules : "additional_rules.tsv"
+allowed_lemma: "lemma.txt"
+allowed_pos: "POS.txt"
+allowed_morph: "morph.tsv"
