@@ -1,7 +1,8 @@
 # CLI de contrôle pour l'outil Pyrrha
 
 Un CLI permet d'exécuter un script sans interface graphique.
-Il s'agit d'un script de contrôle qualité qui vérifie les annotations de l'outil [Pyrrha](https://github.com/hipster-philology/pyrrha) ligne par ligne. Si les lemmes ainsi que les POS (catégorie grammaticale) et les MORPH (nature morphologique) sont autorisés, car présents dans les fichiers correspondants, le CLI renvoie un message pour signaler qu'il n'y a pas d'erreur. S'il y en a, le CLI renvoie un commentaire et le numéro de la ligne où se trouve l'erreur.
+Il s'agit d'un script de contrôle qualité qui vérifie les annotations de l'outil [Pyrrha](https://github.com/hipster-philology/pyrrha). Le script vérifie ligne pas ligne, d'une part si les annotations sont autorisées par chacun des fichiers obligatoires, puis si les annotations sont autorisées ensemble (règles indiquées dans le fichier additional_rules) et si les règles doivent être ignorées (règle ignore). Le CLI renvoie un message pour signaler qu'il n'y a pas d'erreurou, s'il y en a, il renvoie un commentaire et le numéro de la ligne où se trouve l'erreur.
+
 
 ## Les fichiers à fournir au CLI
 
@@ -32,16 +33,12 @@ Le fichier config.yml peut aussi contenir:
 ## Forme du fichier de configuration
 
 Le fichier config.yml doit avoir cette forme:
-allowed_lemma: "fichier.txt"
-allowed_pos: "fichier.txt"
-allowed_morph: "fichier.tsv"
-additional_rules: "fichier.tsv"
-ignore:
--"AllowedLemma:8:Estre5 est particulier au projet"
-
-Le script vérifie d'une part si les annotations sont autorisées par chacun des fichiers obligatoires puis si les annotations sont autorisées ensemble (règles indiquées dans le fichier additional_rules) et si les règles doivent être ignorées (règle ignore).
-
-Ce script CLI a été réalisé en mars 2019 dans le cadre d'un devoir de M2 Technologies numériques appliquées à l'histoire de l'Ecole nationale des Chartes, par deux étudiantes Marie-Caroline Schmied et Emilie Blotière sous le regard avisé de leur professeur Thibault Clérice.
+* allowed_lemma: "fichier.txt"
+* allowed_pos: "fichier.txt"
+* allowed_morph: "fichier.tsv"
+* additional_rules: "fichier.tsv"
+* ignore:
+  -"AllowedLemma:8:Estre5 est particulier au projet"
 
 
 ## Pour installer le CLI:
@@ -51,5 +48,7 @@ Ce script CLI a été réalisé en mars 2019 dans le cadre d'un devoir de M2 Tec
 *Installer et activer un environnement virtuel
 *Installer le CLI en faisant python setup.py install dans votre terminal
 *Lancer le CLI en faisant pyrrha_ci  "config.yml" "fichier à contrôler" dans votre terminal
+
+Ce script CLI a été réalisé en mars 2019 dans le cadre d'un devoir de M2 Technologies numériques appliquées à l'histoire de l'Ecole nationale des Chartes, par deux étudiantes Marie-Caroline Schmied et Emilie Blotière sous le regard avisé de leur professeur Thibault Clérice.
 
 
