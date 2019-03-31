@@ -47,8 +47,9 @@ Le fichier config.yml doit avoir cette forme:
 * Installer Python 3 
 * Cloner ce repository
 * Installer et activer un environnement virtuel
-* Ouvrir le terminal dans le fichier cloné
+* Ouvrir le terminal dans le dossier cloné
 * Installer le CLI en faisant python setup.py install dans votre terminal
+* Veillez à ce que les fichiers de configuration soit dans le dossier cloné
 * Lancer le CLI en faisant pyrrha_ci  "config.yml" "fichier à contrôler" dans votre terminal
 
 Ce script CLI a été réalisé en mars 2019 dans le cadre d'un devoir de M2 Technologies numériques appliquées à l'histoire de l'Ecole nationale des Chartes, par deux étudiantes Marie-Caroline Schmied et Emilie Blotière sous le regard avisé de leur professeur Thibault Clérice.
