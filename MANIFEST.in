@@ -1,7 +1,2 @@
-include morph.tsv
-include POS.txt
-include lemma.txt
-include additional_rules.csv
 include requirements.txt
-include config.yml
-include control_file.tsv
+include README.md
