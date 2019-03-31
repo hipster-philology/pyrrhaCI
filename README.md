@@ -1,4 +1,4 @@
-# CLI de contrôle pour l'outil Pyrrha.
+# CLI de contrôle pour l'outil Pyrrha
 
 Un CLI permet d'exécuter un script sans interface graphique.
 Il s'agit d'un script de contrôle qualité qui vérifie les annotations de l'outil [Pyrrha](https://github.com/hipster-philology/pyrrha) ligne par ligne. Si les lemmes ainsi que les POS (catégorie grammaticale) et les MORPH (nature morphologique) sont autorisés, car présents dans les fichiers correspondants, le CLI renvoie un message pour signaler qu'il n'y a pas d'erreur. S'il y en a, le CLI renvoie un commentaire et le numéro de la ligne où se trouve l'erreur.
@@ -11,16 +11,16 @@ Ce CLI fonctionne avec deux fichiers d'entrée, un fichier de configuration au f
 
 Le fichier config.yml doit nécessairement contenir le chemin de trois fichiers: 
 
-*fichier lemma.txt
-  *sous forme de liste
-  *liste tous les lemmes autorisés dans l'outil
-*fichier POS.txt
-  *liste sur une seule ligne toutes les catégories grammaticales sous formes d'abbréviations
-  *chaque chaîne de caractère est séparée par une virgule
-*fichier morph.tsv
-  *liste toutes les catégories grammaticales  : genre, cas , nombre et conjugaison
-  *sous forme de 2 colonnes, la seconde ayant l'intérêt d'être intelligible pour l'être humain.
-  *seule la première colonne 'label' est parsée et verifiée par le script.
+* fichier lemma.txt
+  * sous forme de liste
+  * liste tous les lemmes autorisés dans l'outil
+* fichier POS.txt
+  * liste sur une seule ligne toutes les catégories grammaticales sous formes d'abbréviations
+  * chaque chaîne de caractère est séparée par une virgule
+* fichier morph.tsv
+  * liste toutes les catégories grammaticales  : genre, cas , nombre et conjugaison
+  * sous forme de 2 colonnes, la seconde ayant l'intérêt d'être intelligible pour l'être humain.
+  * seule la première colonne 'label' est parsée et verifiée par le script.
 
 ## Les fichiers optionnels
 
