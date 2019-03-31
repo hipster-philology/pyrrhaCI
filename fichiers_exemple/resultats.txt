@@ -1,0 +1,39 @@
+La morph n'est pas autorisé à la ligne 2    						# Nous avons inventé un morph
+L'annotation n'est pas dans les pos autorisées à la ligne 3				# Nous avons inventé un pos	
+Le lemme n'est pas dans la liste des lemmes autorisés à la ligne 4			# Nous avons inventé un lemme
+Cette Morph ne peut pas être utilisée avec cette pos à la ligne 5			# Nous avons mis un pos et un lemme qui ne vont pas ensemble
+La Morph n'est pas celle attendue pour cette pos à la ligne 6				# Nous avons mis un morph qui ne va pas avec le pos
+L'annotation n'est pas dans les pos autorisées à la ligne 7				# Nous avons inventé un pos
+Estre5 est particulier au projet à la ligne 8						# Regle ignore 1
+Autorise NOMB.=s|GENRE=m|CAS=n|TEMPS=pst à la ligne 9					# Regle ignore 2
+La morph n'est pas autorisé à la ligne 10						# Nous avons inventé un morph
+tout est ok!										# Aucune erreur
+Autorise autre chose que Morph=Empty sur le token de malgré sa POS=PRE à la ligne 12	# Regle ignore 3
+La morph n'est pas autorisé à la ligne 13						# Nous avons inventé un morph		
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+tout est ok!
+
