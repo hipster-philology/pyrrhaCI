@@ -27,27 +27,28 @@ Le fichier config.yml doit nécessairement contenir le chemin de trois fichiers:
 
 Le fichier config.yml peut aussi contenir:
 
-- Des règles 'ignore', qui prévalent sur les autres règles et normes. Chaque règle est composée de 3 colonnes : index_de_catégorie_erreur, index_de_token et un message intelligible qui explique l'exception. Ces trois parties doivent être séparées par des :. 
+- Des règles 'ignore', qui prévalent sur les autres règles et normes. Chaque règle est composée de 3 colonnes : Index de catégorie erreur, index de token et un message intelligible qui explique l'exception. Ces trois parties doivent être séparées par des :. 
 - Un fichier de règle additionel. C'est un .tsv, qui est composé de 6 colonnes et contient des règles autorisant ou interdisant la combinaison des POS et MORPH.
 
 ## Forme du fichier de configuration
 
 Le fichier config.yml doit avoir cette forme:
+
 * allowed_lemma: "fichier.txt"
 * allowed_pos: "fichier.txt"
 * allowed_morph: "fichier.tsv"
 * additional_rules: "fichier.tsv"
-* ignore:
+* ignore:\
   -"AllowedLemma:8:Estre5 est particulier au projet"
 
 
 ## Pour installer le CLI:
 
-*Installer Python 3
-*Cloner ce repository
-*Installer et activer un environnement virtuel
-*Installer le CLI en faisant python setup.py install dans votre terminal
-*Lancer le CLI en faisant pyrrha_ci  "config.yml" "fichier à contrôler" dans votre terminal
+>*Installer Python 3
+>*Cloner ce repository
+>*Installer et activer un environnement virtuel
+>*Installer le CLI en faisant python setup.py install dans votre terminal
+>*Lancer le CLI en faisant pyrrha_ci  "config.yml" "fichier à contrôler" dans votre terminal
 
 Ce script CLI a été réalisé en mars 2019 dans le cadre d'un devoir de M2 Technologies numériques appliquées à l'histoire de l'Ecole nationale des Chartes, par deux étudiantes Marie-Caroline Schmied et Emilie Blotière sous le regard avisé de leur professeur Thibault Clérice.
 
