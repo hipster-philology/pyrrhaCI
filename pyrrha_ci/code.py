@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
-# nous importons les librairies nécessaires à l'execution du code.
+# nous importons les librairies nécessaires à l'exécution du code.
 import yaml
 import csv
 import click
 
 
 # Nous définissons une classe pour les règles additionnelles que nous nommons Rule.
-# La définition d'une classe permet de ne pas avoir à utiliser l'indexation dans la boucle.
+# La définition d'une classe permet de transmettre des propriétés aux objets qui héritent de cette classe.
+# Nous l'utilisons pour ne pas avoir à utiliser l'indexation dans la boucle.
 class Rule:
     ruleType = ""  # allowed_only | forbidden
     catIn = ""  # POS
@@ -15,7 +16,7 @@ class Rule:
     valIn = ""
     valOut = ""
 
-    # les 2 arguments de la méthode sont self (par convention) et regle qui correpond à chaque colonne du fichier.
+    # les 2 arguments de la méthode sont self (par convention) et regle qui correspond à chaque colonne du fichier.
     def __init__(self, regle):
         self.ruleType = regle[1]
         self.catIn = regle[2]
@@ -24,31 +25,30 @@ class Rule:
         self.valOut = regle[5]
 
 
-# Nous définissons une classe pour les règles à ignorer indiquées dans le fichier config.yml. Par souci de clareté,
-# nous instancions ci-dessous, les 3 objets pour chaque règle, séparés par :.
+# Nous définissons une classe pour les règles à ignorer indiquées dans le fichier config.yml.
 class Ignore:
     index = ""
     token = ""
     commentaire = ""
 
-    # le premier arguement de la méthode class est toujours par convention self, ensuite nous instancions une variable
-    # à chaque objet en indiquant que le token soit communiqué sous forme de chiffre entier.
-    def __init__(self, fig):
+    # le premier arguement de la définition d'une classe est toujours par convention self, ign correspond à chaque colonne du fichier.
+    def __init__(self, ign):
         # le .split, permet de créer une liste à partir d'une chaine de caractère. Le séparateur est indiqué entre ''.
-        fig = fig.split(':')
-        self.index = fig[0]
-        self.token = int(fig[1])
-        self.commentaire = fig[2]
+        ign = ign.split(':')
+        self.index = ign[0]
+    # Nous forçons le type du token, pour qu'il soit du même type que le nombre de lignes.
+        self.token = int(ign[1])
+        self.commentaire = ign[2]
 
 
-# Nous créons une classe pour parser le fichier d'exemple input_example.tsv:
+# Nous créons une classe pour parser le fichier d'exemple:
 class Annotation:
     lemme = ""
     pos = ""
     morph = ""
 
-    # là aussi par convention, nous reprenons le paramètre self et y rajoutons l'extension des labels des colonnes
-    # pour plus de lisibilité. La première colonne ne ne servira pas, puisqu'on ne contrôle pas le token.
+    # là aussi par convention, nous reprenons le paramètre self et y ajoutons annotation. La première colonne n'est pas
+    # prise en compte, car on n'utilisera jamais les tokens.
     def __init__(self, annotation):
         self.lemme = annotation[1]
         self.pos = annotation[2]
@@ -59,14 +59,14 @@ class Annotation:
 
 @click.command()
 # Notre CLI a besoin de deux fichiers pour fonctionner, un de règle, un à contrôler.
-# Les fichiers sont ouverts par click
+# Les fichiers sont ouverts par Click
 @click.argument('input_file', default="config.yml", type=click.File('r'))
 @click.argument('control_file', default="", type=click.File('r'))
 # nous créons ci-dessous notre fonction appelée "test"avec 2 paramètres, le fichier de configuration et le fichier
 # à contrôler.
 def test(input_file, control_file):
 
-    # nous assignons une variable à chaque fichier nous permettant de les lire avec la librairie Yaml.
+    # Nous ouvrons et stockons le contenu du fichier YAML
     config = yaml.safe_load(input_file)
     # Si le fichier de config n'est pas constitué d'un des trois fichiers de base le code s'arrête.
     if "allowed_lemma" not in config:
@@ -79,10 +79,13 @@ def test(input_file, control_file):
         print("Ce CLI a besoin d'un fichier listant les MORPH autorisés pour fonctionner")
         return
 
+    # Sinon, nous assignons à chaque fichier une variable qui nous permet de stocker les informations du fichier YAML
     allowed_lemma = config["allowed_lemma"]
     allowed_pos = config["allowed_pos"]
     allowed_morph = config["allowed_morph"]
 
+    # S'il y a des règles ignores, nous les stockons dans la variable ignore_files
+    # Sinon, nous passons en signalant à l'utilisateur qu'il n'a pas donné d'ignore.
     ignore_files = None
     if "ignore" in config:
         ignore_files = [Ignore(chaine) for chaine in config["ignore"]]
@@ -90,6 +93,8 @@ def test(input_file, control_file):
         print("Vous n'avez pas d'ignore enregistré")
         pass
 
+    # S'il y a des règles additionnelles, nous les stockons dans la variable additional_rules
+    # Sinon, nous passons en signalant à l'utilisateur qu'il n'a pas donné de règles additionnelles.
     additional_rules = None
     if "additional_rules" in config:
         additional_rules = config["additional_rules"]
@@ -144,7 +149,7 @@ def test(input_file, control_file):
     rd = csv.reader(control_file, delimiter="\t", quotechar='"')
     # saute la première ligne
     next(rd, None)
-    # on commence à compter les lignes à 1 et non à zéro, pour que leur numéro matche celui du fichier à contrôler.
+    # on commence à compter les lignes à 1 et non à zéro pour que leur numéro matche celui du fichier à contrôler.
     line_count = 1
     # on crée une liste qui garde les lignes déjà traitées par les règles du ignore.
     ligne_traite = []
@@ -168,7 +173,7 @@ def test(input_file, control_file):
                     print(ignore.commentaire + " à la ligne " + str(line_count))
                     ligne_traite.append(ignore.token)
         # pour les lignes qui ne sont pas dans le ignore, le parsage continue et le système vérifie que les annotations
-        # soient bien dans les fichiers coorespondants.
+        # soient bien dans les fichiers correspondants.
         if line_count not in ligne_traite:
             if row.lemme in lemme:
                 if row.pos in pos:
@@ -176,8 +181,9 @@ def test(input_file, control_file):
                         # nous définissons une variable à laquelle nous assignons la valeur True, pour utiliser les
                         # propriétés des boléens.
                         all_rules_ok = True
+                        # S'il y a un fichier de règle additionnelles,
                         if additional_rules is not None:
-                            # On parse ensuite les additional_rules.
+                            # on parse ensuite les additional_rules.
                             for allowedRule in allowed_rules:
                                 # On regarde si le pos du fichier à contrôler est dans les pos des additional_rules.
                                 if row.pos in allowedRule.valIn:
