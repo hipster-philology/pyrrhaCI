@@ -20,7 +20,7 @@ Le fichier config.yml doit nécessairement contenir le chemin de trois fichiers:
   * chaque chaîne de caractère est séparée par une virgule
 * fichier morph.tsv
   * liste toutes les catégories grammaticales  : genre, cas , nombre et conjugaison
-  * sous forme de 2 colonnes, la seconde ayant l'intérêt d'être intelligible pour l'être humain.
+  * sous forme de 2 colonnes, la seconde ayant l'intérêt d'être intelligible pour l'utilisateur.
   * seule la première colonne 'label' est parsée et verifiée par le script.
 
 ## Les fichiers optionnels
