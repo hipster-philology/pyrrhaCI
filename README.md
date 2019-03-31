@@ -1,7 +1,7 @@
 # CLI de contrôle pour l'outil Pyrrha
 
 Un CLI permet d'exécuter un script sans interface graphique.
-Il s'agit d'un script de contrôle qualité qui vérifie les annotations de l'outil [Pyrrha](https://github.com/hipster-philology/pyrrha). Le script vérifie ligne pas ligne, d'une part si les annotations sont autorisées par chacun des fichiers obligatoires, puis si les annotations sont autorisées ensemble (règles indiquées dans le fichier additional_rules) et si les règles doivent être ignorées (règle ignore). Le CLI renvoie un message pour signaler qu'il n'y a pas d'erreurou, s'il y en a, il renvoie un commentaire et le numéro de la ligne où se trouve l'erreur.
+Il s'agit d'un script de contrôle qualité qui vérifie les annotations de l'outil [Pyrrha](https://github.com/hipster-philology/pyrrha). Le script vérifie ligne par ligne, d'une part si les annotations sont autorisées par chacun des fichiers obligatoires et d'autre part si les annotations sont autorisées ensemble (règles indiquées dans le fichier additional_rules) et si les règles doivent être ignorées (règle ignore). Le CLI renvoie un message pour signaler qu'il n'y a pas d'erreur ou, s'il y en a, il renvoie un commentaire et le numéro de la ligne où se trouve l'erreur.
 
 
 ## Les fichiers à fournir au CLI
