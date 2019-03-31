@@ -47,6 +47,7 @@ Le fichier config.yml doit avoir cette forme:
 * Installer Python 3 
 * Cloner ce repository
 * Installer et activer un environnement virtuel
+* Ouvrir le terminal dans le fichier cloné
 * Installer le CLI en faisant python setup.py install dans votre terminal
 * Lancer le CLI en faisant pyrrha_ci  "config.yml" "fichier à contrôler" dans votre terminal
 
