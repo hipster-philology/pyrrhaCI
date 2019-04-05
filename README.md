@@ -41,6 +41,7 @@ Le fichier config.yml doit avoir cette forme:
 * ignore:  
   - "AllowedLemma:8:Estre5 est particulier au projet"
 
+Les ignore peuvent prendre une valeur autorisée directement en deuxième position
 
 ## Pour installer le CLI:
 
