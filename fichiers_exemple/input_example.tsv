@@ -9,7 +9,7 @@ soit	estre5	VERcjg	MODE=sub|TEMPS=pst|PERS.=3|NOMB.=s
 amis	ami	NOMcom	NOMB.=s|GENRE=m|CAS=n|TEMPS=pst	
 on	on	PROind	CAS=n|Pers.=3	
 III	trois	DETcar	NOMB.=p|GENRE=m|CAS=r	
-vers	vers1	POS=PRE	NOMB.=p|GENRE=m|CAS=r	
+vers	vers1	POS=PRE	NOMB.=p|GENRE=m|CAS=r
 de	de	PRE	NOMB.=s|CAS=n	
 bone	bon	ADJqua	NOMB.=s|GENRE=f|CAS=r|DEGRE=p	
 estoire	estoire1	NOMcom	NOMB.=s|GENRE=f|CAS=r	
