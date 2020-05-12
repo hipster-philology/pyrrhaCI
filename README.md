@@ -18,10 +18,28 @@ Le fichier config.yml doit nécessairement contenir le chemin de trois fichiers:
 * fichier POS.txt
   * liste sur une seule ligne toutes les catégories grammaticales sous formes d'abbréviations
   * chaque chaîne de caractère est séparée par une virgule
-* fichier morph.tsv
-  * liste toutes les catégories grammaticales  : genre, cas , nombre et conjugaison
-  * sous forme de 2 colonnes, la seconde ayant l'intérêt d'être intelligible pour l'utilisateur.
-  * seule la première colonne 'label' est parsée et verifiée par le script.
+
+### Le fichier morph.tsv
+
+* liste toutes les catégories grammaticales  : genre, cas , nombre et conjugaison
+* potentiellement sous deux colonnes, au moins une colonne "morph", une colonne optionnelle "POS"
+* la deuxième colonne est utilisée pour valider des traits morphologiques en fonction de l'annotation de POS
+
+#### Exemple 1
+
+```tsv
+morph	POS
+Case=Nom|Numb=Sing	NOMpro,NOMcom,PROper
+Case=Voc|Numb=Sing	NOMpro,NOMcom,PROper
+```
+
+#### Exemple 2
+
+```tsv
+morph
+Case=Nom|Numb=Sing
+Case=Voc|Numb=Sing
+```
 
 ## Les fichiers optionnels
 
@@ -34,12 +52,14 @@ Le fichier config.yml peut aussi contenir:
 
 Le fichier config.yml doit avoir cette forme:
 
-* allowed_lemma: "fichier.txt"
-* allowed_pos: "fichier.txt"
-* allowed_morph: "fichier.tsv"
-* additional_rules: "fichier.tsv"
-* ignore:  
+```yaml
+allowed_lemma: "fichier.txt"
+allowed_pos: "fichier.txt"
+allowed_morph: "fichier.tsv"
+additional_rules: "fichier.tsv"
+ignore:  
   - "AllowedLemma:8:Estre5 est particulier au projet"
+```
 
 Les ignore peuvent prendre une valeur autorisée directement en deuxième position
 

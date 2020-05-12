@@ -13,6 +13,6 @@ setup(
       author="Marie-Caroline Schmied et Emilie Blotière",
       install_requires=['pyyaml', 'click'],
       entry_points={
-        'console_scripts': ['pyrrha_ci = pyrrha_ci.code:test']
+        'console_scripts': ['pyrrha-ci = pyrrha_ci.code:test']
       }
 )
