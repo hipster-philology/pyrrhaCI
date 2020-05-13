@@ -1,3 +1,4 @@
 click
 pyyaml
 #setuptools ==39.1.0
+regex

@@ -3,11 +3,16 @@
 # nous importons les librairies nécessaires à l'exécution du code.
 import os
 import csv
-import re
+import regex as re
 import yaml
 import click
 from enum import Enum
-from typing import List, Optional, TextIO, Dict
+from typing import List, Optional, TextIO, Dict, Generator, Tuple, Set, Union
+from collections import namedtuple
+
+_Ret = namedtuple("Ret", ["errors", "failed", "checked", "ignored"])
+Numb = re.compile("^\d+$")
+Punc = re.compile("^\W+$")
 
 
 class MESSAGE_TYPE(Enum):
@@ -20,6 +25,42 @@ class MESSAGE_TYPE(Enum):
 
 semi_colon_split = re.compile(r"(?<!\\):")
 
+
+def parse_tsv(content: Union[str, TextIO]) -> Generator[Tuple[int, Dict[str, str]], None, None]:
+    """ Parses a Pyrrha TSV
+
+    :param content: Path to the file
+    :yield: Yields the line number and the content
+    """
+    if isinstance(content, str):
+        content = open(content)
+    header = []
+    for line_no, line in enumerate(content):
+        if line_no == 0:
+            header = line.strip().split("\t")
+        else:
+            yield line_no, dict(zip(header, line.strip().split("\t")))
+    content.close()
+    return None
+
+
+def merge(source, destination):
+    """Merges b into a
+
+    Source: https://stackoverflow.com/questions/20656135/python-deep-merge-dictionary-data
+
+    >>> a = { 'first' : { 'all_rows' : { 'pass' : 'dog', 'number' : '1' } } }
+    >>> b = { 'first' : { 'all_rows' : { 'fail' : 'cat', 'number' : '5' } } }
+    >>> merge(b, a) == { 'first' : { 'all_rows' : { 'pass' : 'dog', 'fail' : 'cat', 'number' : '5' } } }
+    True
+    """
+    for key, value in source.items():
+        if isinstance(value, dict):
+            # get node or create one
+            node = destination.setdefault(key, {})
+            merge(value, node)
+        else:
+            destination[key] = value
 
 # Nous définissons une classe pour les règles additionnelles que nous nommons Rule.
 # La définition d'une classe permet de transmettre des propriétés aux objets qui héritent de cette classe.
@@ -98,6 +139,16 @@ class Test:
             "lemma": config.get("mapping", {"lemma": {}}).get("lemma", {})
         }
 
+        self.options = {
+            "lemma":
+                {
+                    "allow_punc": False,
+                    "allow_numb": False,
+                    "ignore_on_POS": []
+                }
+        }
+        merge(config.get("options", {}), self.options)
+
         # Si le fichier de config n'est pas constitué d'un des trois fichiers de base le code s'arrête.
         if "allowed_lemma" not in config:
             self.print("Ce CLI n'a pas trouvé de fichier pour les lemmes autorisés",
@@ -149,10 +200,12 @@ class Test:
             self.print("Vous n'avez pas de règles additionnelles enregistrées", level=MESSAGE_TYPE.INFO)
 
         # Ouverture et lecture du fichier lemma.txt, stockage du texte dans la variable lemme.
-        self.allowed_lemma = None
+        self.allowed_lemma: Dict[str, Set[str]] = {}
         if config.get("allowed_lemma"):
-            with open(_relative_path(config_file.name, config["allowed_lemma"])) as liste_lemma:
-                self.allowed_lemma = tuple(liste_lemma.read().split())
+            for _, data in parse_tsv(_relative_path(config_file.name, config["allowed_lemma"])):
+                self.allowed_lemma[data["lemma"]] = set()
+                if "POS" in data:
+                    self.allowed_lemma[data["lemma"]] = set(data["POS"].split(","))
 
         # Ouverture et lecture du fichier morph.tsv avec délimiteur tsv : \t et encapsulateur ''.
         self.allowed_morph: Dict[str, List[str]] = {}
@@ -194,17 +247,169 @@ class Test:
             prefix += level.value
         print(prefix + message + '\033[0m')
 
+    def _test_lemma(self, lem=None, morph=None, pos=None, line_no=0) -> _Ret:
+        """
+
+        :returns: Nb Error, Has Failed, Was Checked, Was Ignored
+        """
+        if not self.allowed_lemma:
+            return _Ret(errors=0, failed=False, checked=False, ignored=False)
+        elif lem in self.allowed_lemma:
+            return _Ret(errors=0, failed=False, checked=True, ignored=False)
+        else:
+            # Si cette ligne est une ligne à ignorer pour les erreurs niveau lemme
+            if self.ignored["lemma"].get(line_no):
+                self.print(
+                    "Erreur ignorée au niveau ligne ({})".format(self.ignored["lemma"][line_no]),
+                    line_number=line_no, level=MESSAGE_TYPE.IGNORE
+                )
+                return _Ret(errors=0, failed=False, checked=True, ignored=True)
+            # Si cette valeur de lemme est  autoriser en général
+            elif self.ignored["lemma"].get(lem):
+                self.print(
+                    "Erreur ignorée au niveau lemme ({})".format(self.ignored["lemma"][lem]),
+                    line_number=line_no, level=MESSAGE_TYPE.IGNORE
+                )
+                return _Ret(errors=0, failed=False, checked=True, ignored=True)
+            # Sinon, c'est une erreur
+            else:
+                if self.options["lemma"]["allow_numb"] and Numb.match(lem):
+                    return _Ret(errors=0, failed=False, checked=True, ignored=True)
+                elif self.options["lemma"]["allow_punc"] and Punc.match(lem):
+                    return _Ret(errors=0, failed=False, checked=True, ignored=True)
+                elif pos and pos in self.options["lemma"]["ignore_on_POS"]:
+                    return _Ret(errors=0, failed=False, checked=True, ignored=True)
+                else:
+                    self.print(
+                        "Le lemme `{}` n'est pas dans la liste des valeurs autorisées".format(lem),
+                        line_number=line_no, level=MESSAGE_TYPE.FAIL
+                    )
+                    return _Ret(errors=1, failed=True, checked=True, ignored=False)
+
+    def _test_pos(self, lem, pos, morph, line_no=0) -> _Ret:
+        # Vérifie les POS de la même manière
+        if not self.allowed_pos:
+            return _Ret(errors=0, failed=False, checked=False, ignored=False)
+        elif pos in self.allowed_pos:
+            return _Ret(errors=0, failed=False, checked=True, ignored=False)
+        else:
+            if self.ignored["POS"].get(line_no):
+                self.print("Erreur ignorée au niveau POS ({})".format(self.ignored["POS"][line_no]),
+                           line_number=line_no, level=MESSAGE_TYPE.IGNORE)
+                return _Ret(errors=0, failed=False, checked=True, ignored=True)
+            elif self.ignored["POS"].get(pos):
+                self.print("Erreur ignorée au niveau POS ({})".format(self.ignored["POS"][pos]),
+                           line_number=line_no, level=MESSAGE_TYPE.IGNORE)
+                return _Ret(errors=0, failed=False, checked=True, ignored=True)
+            else:
+                self.print("La POS `{}` n'est pas dans la liste des valeurs autorisées".format(pos),
+                           line_number=line_no, level=MESSAGE_TYPE.FAIL)
+                return _Ret(errors=1, failed=True, checked=True, ignored=False)
+
+    def _test_morph(self, lem, pos, morph, line_no=0) -> _Ret:
+        if not self.allowed_morph:
+            return _Ret(errors=0, failed=False, checked=False, ignored=False)
+        elif morph in self.allowed_morph:
+            return _Ret(errors=0, failed=False, checked=True, ignored=False)
+        else:
+            if self.ignored["morph"].get(line_no):
+                self.print(
+                    "Erreur ignorée au niveau morph ({})".format(self.ignored["morph"][line_no]),
+                    line_number=line_no, level=MESSAGE_TYPE.IGNORE
+                )
+                return _Ret(errors=0, failed=False, checked=True, ignored=True)
+            elif self.ignored["morph"].get(morph):
+                self.print("Erreur ignorée au niveau morph ({})".format(self.ignored["morph"][morph]),
+                           line_number=line_no, level=MESSAGE_TYPE.IGNORE)
+                return _Ret(errors=0, failed=False, checked=True, ignored=True)
+            else:
+                self.print("La morph `{}` n'est pas dans la liste des morph autorisées".format(morph),
+                           line_number=line_no, level=MESSAGE_TYPE.FAIL)
+                return _Ret(errors=1, failed=True, checked=True, ignored=False)
+
+    def _test_additional_rules(self, row, line_no=0) -> int:
+        errors = 0
+        for allowedRule in self.allowed_rules:
+            if allowedRule.id in self.ignored and line_no in self.ignored[allowedRule.id]:
+                self.print("Erreur ignorée au niveau de la règle supplémentaire {}".format(allowedRule.id),
+                           line_number=line_no, level=MESSAGE_TYPE.IGNORE)
+            else:
+                # Si la catégorie de contrôle comporte la même valeur que catIn
+                if row.get(allowedRule.catIn) and allowedRule.valIn.match(row.get(allowedRule.catIn)):
+                    # On peut alors vérifier l'adéquation avec valOut
+                    if allowedRule.ruleType == "allowed_only" and \
+                            not allowedRule.valOut.match(row.get(allowedRule.catOut)):
+                        # On marque une erreur supplémentaire
+                        errors += 1
+                        # et on imprime un commentaire avec le N° de la ligne
+                        self.print(
+                            "La valeur `{}` ne fait pas partie des valeurs autorisées en relation avec  la"
+                            " valeur `{}` (Règle {})".format(
+                                row.get(allowedRule.catOut),
+                                row.get(allowedRule.catIn),
+                                allowedRule.id
+                            ),
+                            line_number=line_no, level=MESSAGE_TYPE.FAIL
+                        )
+                    elif allowedRule.ruleType == "forbidden" and \
+                            allowedRule.valOut.match(row.get(allowedRule.catOut)):
+                        # On marque une erreur supplémentaire
+                        errors += 1
+                        # et on imprime un commentaire avec le N° de la ligne
+                        self.print(
+                            "La valeur `{}` est interdie en relation avec "
+                            "la valeur `{}` (Règle {})".format(
+                                row.get(allowedRule.catOut),
+                                row.get(allowedRule.catIn),
+                                allowedRule.id
+                            ),
+                            line_number=line_no, level=MESSAGE_TYPE.FAIL
+                        )
+                        # Si on a forbidden, le morph du fichier de contrôle ne doit pas être le même
+                        # que celui du fichier additional_rules. Si c'est le cas:
+        return errors
+
+    def _test_cross_lemma_pos(self, lem, pos, form, line_no=0) -> int:
+        if self.allowed_lemma[lem] and pos not in self.allowed_lemma[lem]:
+            self.print(
+                "La POS `{}` n'est pas autorisée avec le lemme `{}` (Token `{}`). Autorisées: `{}`".format(
+                    pos, lem, form, ",".join(self.allowed_lemma[lem])
+                ),
+                line_number=line_no, level=MESSAGE_TYPE.FAIL
+            )
+            return 1
+        return 0
+
+    def _test_cross_pos_morph(self, pos, morph, form, line_no=0) -> int:
+        if pos not in self.allowed_morph[morph]:
+            self.print(
+                "La morph `{}` n'est pas  autorisée avec la POS `{}` (Token `{}`)".format(
+                    morph, pos, form
+                ),
+                line_number=line_no, level=MESSAGE_TYPE.FAIL
+            )
+            return 1
+        return 0
+
+    def _get_values(self, row) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+        lem = row.get("lemma")
+        if lem and lem in self.mapping["lemma"]:
+            lem = self.mapping["morph"][lem]
+        pos = row.get("POS")
+        if pos and pos in self.mapping["pos"]:
+            pos = self.mapping["pos"][pos]
+        morph = row.get("morph")
+        if morph and morph in self.mapping["morph"]:
+            morph = self.mapping["morph"][morph]
+        form = row.get("token", row.get("form"))
+        return form, lem, pos, morph
+
     def test(self, control_file: TextIO, from_=0, to_=0):
         """ Test the file against the loaded rules
 
         :param control_file: File to test
         :return:
         """
-        # On vérifie la structure du fichier automatiquement :
-        #   https://docs.python.org/3/library/csv.html#csv.Sniffer.has_header
-        dialect = csv.Sniffer().sniff(control_file.read(1024))
-        control_file.seek(0)
-        rd = csv.DictReader(control_file, dialect=dialect)
 
         # Si on a une erreur, on l'ajoutera à ce décompte
         errors = 0
@@ -217,7 +422,7 @@ class Test:
 
         # nous créons une boucle qui compare les annotations aux formes autorisées par les 3 fichiers de configuration,
         # les règles d'ignore et les additional_rules et qui vérifie si les lignes sont bien autorisées.
-        for row_num, row in enumerate(rd):
+        for row_num, row in parse_tsv(control_file):
             if from_ is not None and row_num < from_:
                 continue
             elif to_ is not None and row_num > to_:
@@ -234,112 +439,27 @@ class Test:
             # Pour les lignes qui ne sont pas dans le ignore, le parsage continue et
             #   le système vérifie que les annotations soient bien dans les fichiers correspondants.
             if cur_line_friendly not in ligne_traite:
-                lem = row.get("lemma")
-                # On vérifie qu'on a une liste et si il n'est pas dans la liste
-                if self.allowed_lemma and lem and lem not in self.allowed_lemma:
-                    # Si cette ligne est une ligne à ignorer pour les erreurs niveau lemme
-                    if self.ignored["lemma"].get(cur_line_friendly):
-                        self.print(
-                            "Erreur ignorée au niveau lemme ({})".format(self.ignored["lemma"][cur_line_friendly]),
-                            line_number=cur_line_friendly, level=MESSAGE_TYPE.IGNORE
-                        )
-                    # Si cette valeur de lemme est  autoriser en général
-                    elif self.ignored["lemma"].get(lem):
-                        self.print(
-                            "Erreur ignorée au niveau lemme ({})".format(self.ignored["lemma"][row["lemma"]]),
-                            line_number=cur_line_friendly, level=MESSAGE_TYPE.IGNORE
-                        )
-                    # Sinon, c'est une erreur
-                    else:
-                        self.print(
-                            "Le lemme `{}` n'est pas dans la liste des valeurs autorisées".format(lem),
-                            line_number=cur_line_friendly, level=MESSAGE_TYPE.FAIL
-                        )
-                        errors += 1
+                form, lem, pos, morph = self._get_values(row)
 
-                # Vérifie les POS de la même manière
-                pos = row.get("POS")
-                if pos and pos in self.mapping["pos"]:
-                    pos = self.mapping["pos"][pos]
-                if self.allowed_pos and pos and pos not in self.allowed_pos:
-                    if self.ignored["POS"].get(cur_line_friendly):
-                        self.print("Erreur ignorée au niveau POS ({})".format(self.ignored["POS"][cur_line_friendly]),
-                                   line_number=cur_line_friendly, level=MESSAGE_TYPE.IGNORE)
-                    elif self.ignored["POS"].get(pos):
-                        self.print("Erreur ignorée au niveau POS ({})".format(self.ignored["POS"][pos]),
-                                   line_number=cur_line_friendly, level=MESSAGE_TYPE.IGNORE)
-                    else:
-                        self.print("La POS `{}` n'est pas dans la liste des valeurs autorisées".format(pos),
-                                   line_number=cur_line_friendly, level=MESSAGE_TYPE.FAIL)
-                        errors += 1
+                lem_status = self._test_lemma(lem=lem, pos=pos, morph=morph, line_no=cur_line_friendly)
+                errors += lem_status.errors
 
-                # Vérifie les morphs de la même manière
-                morph = row.get("morph")
-                if morph and morph in self.mapping["morph"]:
-                    morph = self.mapping["morph"][morph]
-                if self.allowed_morph and morph and morph not in self.allowed_morph:
-                    if self.ignored["morph"].get(cur_line_friendly):
-                        self.print(
-                            "Erreur ignorée au niveau morph ({})".format(self.ignored["morph"][cur_line_friendly]),
-                            line_number=cur_line_friendly, level=MESSAGE_TYPE.IGNORE
-                        )
-                    elif self.ignored["morph"].get(morph):
-                        self.print("Erreur ignorée au niveau morph ({})".format(self.ignored["morph"][morph]),
-                                   line_number=cur_line_friendly, level=MESSAGE_TYPE.IGNORE)
-                    else:
-                        self.print("La morph `{}` n'est pas dans la liste des morph autorisées".format(morph),
-                                   line_number=cur_line_friendly, level=MESSAGE_TYPE.FAIL)
-                        errors += 1
+                pos_status = self._test_pos(lem=lem, pos=pos, morph=morph, line_no=cur_line_friendly)
+                errors += pos_status.errors
 
-                if self.allowed_morph and self.allowed_pos and pos and morph in self.allowed_morph:
-                    if self.allowed_morph[morph] and pos not in self.allowed_morph[morph]:
-                        self.print(
-                            "La morph `{}` n'est pas  autorisée avec la POS `{}` (Token `{}`)".format(
-                                morph, pos, row.get("token", row.get("form"))
-                            ),
-                            line_number=cur_line_friendly, level=MESSAGE_TYPE.FAIL
-                        )
-                        errors += 1
+                if lem_status.checked and pos_status.checked and not lem_status.ignored and not pos_status.ignored\
+                        and not lem_status.failed and not pos_status.failed:
+                    errors += self._test_cross_lemma_pos(lem, pos, form=form, line_no=cur_line_friendly)
+
+                morph_status = self._test_morph(lem=lem, pos=pos, morph=morph, line_no=cur_line_friendly)
+                errors += morph_status.errors
+
+                if morph_status.checked and pos_status.checked and not morph_status.ignored and not pos_status.ignored\
+                        and not morph_status.failed and not pos_status.failed:
+                    errors += self._test_cross_pos_morph(pos, morph, form=form, line_no=cur_line_friendly)
 
                 # on parse ensuite les additional_rules.
-                for allowedRule in self.allowed_rules:
-                    if allowedRule.id in self.ignored and cur_line_friendly in self.ignored[allowedRule.id]:
-                        self.print("Erreur ignorée au niveau de la règle supplémentaire {}".format(allowedRule.id),
-                                   line_number=cur_line_friendly, level=MESSAGE_TYPE.IGNORE)
-                    else:
-                        # Si la catégorie de contrôle comporte la même valeur que catIn
-                        if row.get(allowedRule.catIn) and allowedRule.valIn.match(row.get(allowedRule.catIn)):
-                            # On peut alors vérifier l'adéquation avec valOut
-                            if allowedRule.ruleType == "allowed_only" and \
-                                    not allowedRule.valOut.match(row.get(allowedRule.catOut)):
-                                # On marque une erreur supplémentaire
-                                errors += 1
-                                # et on imprime un commentaire avec le N° de la ligne
-                                self.print(
-                                    "La valeur `{}` ne fait pas partie des valeurs autorisées en relation avec  la"
-                                    " valeur `{}` (Règle {})".format(
-                                        row.get(allowedRule.catOut),
-                                        row.get(allowedRule.catIn),
-                                        allowedRule.id
-                                    ),
-                                    line_number=cur_line_friendly, level=MESSAGE_TYPE.FAIL
-                                )
-                            elif allowedRule.ruleType == "forbidden" and \
-                                allowedRule.valOut.match(row.get(allowedRule.catOut)):
-                                # On marque une erreur supplémentaire
-                                errors += 1
-                                # et on imprime un commentaire avec le N° de la ligne
-                                self.print(
-                                    "La valeur `{}` est interdie en relation avec "
-                                    "la valeur `{}` (Règle {})".format(
-                                        row.get(allowedRule.catOut),
-                                        row.get(allowedRule.catIn),
-                                        allowedRule.id
-                                    ),
-                                    line_number=cur_line_friendly, level=MESSAGE_TYPE.FAIL
-                                )
-                                # Si on a forbidden, le morph du fichier de contrôle ne doit pas être le même
-                                # que celui du fichier additional_rules. Si c'est le cas:
+                errors += self._test_additional_rules(row)
 
         if errors > 0:
             self.print("\n\n----------------\n\n")
