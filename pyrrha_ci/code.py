@@ -7,7 +7,7 @@ import regex as re
 import yaml
 import click
 from enum import Enum
-from typing import List, Optional, TextIO, Dict, Generator, Tuple, Set, Union
+from typing import List, Optional, TextIO, Dict, Generator, Tuple, Set, Union, Any
 from collections import namedtuple
 
 _Ret = namedtuple("Ret", ["errors", "failed", "checked", "ignored"])
@@ -61,6 +61,7 @@ def merge(source, destination):
             merge(value, node)
         else:
             destination[key] = value
+
 
 # Nous définissons une classe pour les règles additionnelles que nous nommons Rule.
 # La définition d'une classe permet de transmettre des propriétés aux objets qui héritent de cette classe.
@@ -125,19 +126,113 @@ class Test:
     :param config_file: Address of the file that loads the configuration
     """
 
-    def __init__(self, config_file: TextIO):
+    @classmethod
+    def from_file_io(cls, config_file: TextIO) -> "Test":
         # Nous ouvrons et stockons le contenu du fichier YAML
-
         config = yaml.safe_load(config_file)
 
-        # Les des colonnes attendues
-        self.expected_columns: List[str] = ["token"]
+        expected_columns = ["token"]
 
-        self.mapping: Dict[str, Dict[str, str]] = {
-            "morph": config.get("mapping", {"morph": {}}).get("morph", {}),
-            "pos": config.get("mapping", {"pos": {}}).get("pos", {}),
-            "lemma": config.get("mapping", {"lemma": {}}).get("lemma", {})
-        }
+        # Si le fichier de config n'est pas constitué d'un des trois fichiers de base le code s'arrête.
+        if "allowed_lemma" not in config:
+            cls.static_print("Ce CLI n'a pas trouvé de fichier pour les lemmes autorisés",
+                       level=MESSAGE_TYPE.INFO)
+        else:
+            expected_columns.append("lemma")
+        if "allowed_pos" not in config:
+            cls.static_print("Ce CLI n'a pas trouvé de fichier pour les POS autorisées",
+                       level=MESSAGE_TYPE.INFO)
+        else:
+            expected_columns.append("POS")
+        if "allowed_morph" not in config:
+            cls.static_print("Ce CLI n'a pas trouvé de fichier pour les tags de morphologies autorisés",
+                       level=MESSAGE_TYPE.INFO)
+        else:
+            expected_columns.append("morph")
+
+        ignore = {}
+        if "ignore" in config:
+            for chaine in config["ignore"]:
+                ignored = Ignore(chaine)
+                if ignored.type.isnumeric() and ignored.type not in ignored:
+                    ignore[ignored.type] = {}
+                ignore[ignored.type][ignored.token] = ignored.commentaire
+        else:
+            cls.static_print("Vous n'avez pas d'ignore enregistré", level=MESSAGE_TYPE.INFO)
+
+        allowed_rules: List[Rule] = []
+        if "additional_rules" in config:
+            # Ouverture et lecture du fichier additional_rules avec le délimiteur de colonne tsv \t et encapsulateur '',
+            # s'il existe.
+            for _, regle in parse_tsv(_relative_path(config_file.name, config["additional_rules"])):
+                # On vérifie que le fichier à bien 6 colonnes. S'il en a moins, on envoie un message d'erreur.
+                if len(regle) < 6:
+                    cls.static_print("Votre fichier additionnal_rules est mal formé", level=MESSAGE_TYPE.FAIL)
+                # Sinon, on ajoute à la liste les éléments auquel on donne la classe Rule.
+                else:
+                    allowed_rules.append(Rule(regle))
+        else:
+            cls.static_print("Vous n'avez pas de règles additionnelles enregistrées", level=MESSAGE_TYPE.INFO)
+
+        # Ouverture et lecture du fichier lemma.txt, stockage du texte dans la variable lemme.
+        allowed_lemma = {}
+        if config.get("allowed_lemma"):
+            for _, data in parse_tsv(_relative_path(config_file.name, config["allowed_lemma"])):
+                allowed_lemma[data["lemma"]] = set()
+                if "POS" in data:
+                    allowed_lemma[data["lemma"]] = set(data["POS"].split(","))
+
+        # Ouverture et lecture du fichier morph.tsv avec délimiteur tsv : \t et encapsulateur ''.
+        allowed_morph: Dict[str, List[str]] = {}
+        if config.get("allowed_morph"):
+            for row_num, row in parse_tsv(_relative_path(config_file.name, config.get("allowed_morph"))):
+                morph = row["morph"]
+                if morph in allowed_morph:
+                    allowed_morph[morph].extend(row.get("POS", "").split(","))
+                else:
+                    allowed_morph[morph] = row.get("POS", "").split(",")
+
+        # ouverture et lecture du fichier POS, stockage du texte dans la variable pos.
+        allowed_pos = None
+        if config.get("allowed_pos"):
+            with open(_relative_path(config_file.name, config.get("allowed_pos"))) as open_file:
+                allowed_pos = set(open_file.read().strip().split(","))
+
+        print(expected_columns)
+
+        return cls(
+            expected_columns=expected_columns,
+            allowed_lemma=allowed_lemma,
+            allowed_morph=allowed_morph,
+            allowed_pos=allowed_pos,
+            ignore=ignore,
+            allowed_rules=allowed_rules,
+            mapping=config.get("mapping", {}),
+            options=config.get("options", {})
+        )
+
+    def __init__(
+            self,
+            expected_columns,
+            allowed_lemma: Optional[Dict[str, Set[str]]] = None,
+            allowed_pos: Optional[List[str]] = None,
+            allowed_morph: Optional[Dict[str, List[str]]] = None,
+            allowed_rules: Optional[List[Rule]] = None,
+            ignore: Optional[Dict[str, Dict[str, Ignore]]] = None,
+            mapping: Optional[Dict[str, Dict[str, str]]] = None,
+            options: Optional[Dict[str, Any]] = None
+    ):
+        self.expected_columns: List[str] = expected_columns
+        self.allowed_lemma: Dict[str, Set[str]] = allowed_lemma or {}
+        self.allowed_morph: Dict[str, List[str]] = allowed_morph or {}
+        self.allowed_pos: Set[str] = allowed_pos or set()
+        self.allowed_rules: List[Rule] = allowed_rules or []
+
+        self.ignored: Dict[str, Dict[str, Ignore]] = {category: {} for category in self.expected_columns}
+        merge(ignore or {}, self.ignored)
+
+        self.mapping: Dict[str, Dict[str, str]] = {"morph": {}, "pos": {}, "lemma": {}}
+        merge(mapping or {}, self.mapping)
 
         self.options = {
             "lemma":
@@ -147,93 +242,10 @@ class Test:
                     "ignore_on_POS": []
                 }
         }
-        merge(config.get("options", {}), self.options)
+        merge(options or {}, self.options)
 
-        # Si le fichier de config n'est pas constitué d'un des trois fichiers de base le code s'arrête.
-        if "allowed_lemma" not in config:
-            self.print("Ce CLI n'a pas trouvé de fichier pour les lemmes autorisés",
-                       level=MESSAGE_TYPE.INFO)
-        else:
-            self.expected_columns.append("lemma")
-        if "allowed_pos" not in config:
-            self.print("Ce CLI n'a pas trouvé de fichier pour les POS autorisées",
-                       level=MESSAGE_TYPE.INFO)
-        else:
-            self.expected_columns.append("POS")
-        if "allowed_morph" not in config:
-            self.print("Ce CLI n'a pas trouvé de fichier pour les tags de morphologies autorisés",
-                       level=MESSAGE_TYPE.INFO)
-        else:
-            self.expected_columns.append("morph")
-
-        # S'il y a des règles ignores, nous les stockons dans la variable ignore_files
-        # Sinon, nous passons en signalant à l'utilisateur qu'il n'a pas donné d'ignore.
-        self.ignored = {category: {} for category in self.expected_columns}
-        if "ignore" in config:
-            for chaine in config["ignore"]:
-                ignored = Ignore(chaine)
-                if ignored.type.isnumeric() and ignored.type not in self.ignored:
-                    self.ignored[ignored.type] = {}
-                self.ignored[ignored.type][ignored.token] = ignored.commentaire
-        else:
-            self.print("Vous n'avez pas d'ignore enregistré", level=MESSAGE_TYPE.INFO)
-
-        # S'il y a des règles additionnelles, nous les stockons dans la variable allowed_rules
-        # Sinon, nous passons en signalant à l'utilisateur qu'il n'a pas donné de règles additionnelles.
-        # création d'une liste pour permettre l'indexation
-        self.allowed_rules = []
-        if "additional_rules" in config:
-            # Ouverture et lecture du fichier additional_rules avec le délimiteur de colonne tsv \t et encapsulateur '',
-            # s'il existe.
-            with open(_relative_path(config_file.name, config["additional_rules"])) as open_file:
-                rd = csv.reader(open_file, delimiter="\t", quotechar='"')
-                # nous sautons ici la première ligne qui contient l'en-tête au moment du parsage
-                next(rd, None)
-                for regle in rd:
-                    # On vérifie que le fichier à bien 6 colonnes. S'il en a moins, on envoie un message d'erreur.
-                    if len(regle) < 6:
-                        self.print("Votre fichier additionnal_rules est mal formé", level=MESSAGE_TYPE.FAIL)
-                    # Sinon, on ajoute à la liste les éléments auquel on donne la classe Rule.
-                    else:
-                        self.allowed_rules.append(Rule(regle))
-        else:
-            self.print("Vous n'avez pas de règles additionnelles enregistrées", level=MESSAGE_TYPE.INFO)
-
-        # Ouverture et lecture du fichier lemma.txt, stockage du texte dans la variable lemme.
-        self.allowed_lemma: Dict[str, Set[str]] = {}
-        if config.get("allowed_lemma"):
-            for _, data in parse_tsv(_relative_path(config_file.name, config["allowed_lemma"])):
-                self.allowed_lemma[data["lemma"]] = set()
-                if "POS" in data:
-                    self.allowed_lemma[data["lemma"]] = set(data["POS"].split(","))
-
-        # Ouverture et lecture du fichier morph.tsv avec délimiteur tsv : \t et encapsulateur ''.
-        self.allowed_morph: Dict[str, List[str]] = {}
-        if config.get("allowed_morph"):
-            with open(_relative_path(config_file.name, config.get("allowed_morph"))) as open_file:
-                rd = csv.reader(open_file, delimiter="\t")
-                # nous lui demandons de lire chaque ligne du fichier et de stocker les données de la première colonne
-                # dans une liste.
-                header: List[str] = []
-                for row_num, row in enumerate(rd):
-                    if row_num == 0:
-                        header = row
-                    # Sinon, on ajoute à la liste morph les éléments de la première colonne.
-                    else:
-                        row = dict(zip(header, row))
-                        morph = row["morph"]
-                        if morph in self.allowed_morph:
-                            self.allowed_morph[morph].extend(row.get("POS", "").split(","))
-                        else:
-                            self.allowed_morph[morph] = row.get("POS", "").split(",")
-
-        # ouverture et lecture du fichier POS, stockage du texte dans la variable pos.
-        self.allowed_pos = None
-        if config.get("allowed_pos"):
-            with open(_relative_path(config_file.name, config.get("allowed_pos"))) as open_file:
-                self.allowed_pos = open_file.read()
-
-    def print(self, message: str, line_number: Optional[int] = None, level: Optional[MESSAGE_TYPE] = None) -> None:
+    @staticmethod
+    def static_print(message: str, line_number: Optional[int] = None, level: Optional[MESSAGE_TYPE] = None) -> None:
         """ Print the given message with its line number and optional formating given the level
 
         :param message: Message to show
@@ -246,6 +258,15 @@ class Test:
         if level:
             prefix += level.value
         print(prefix + message + '\033[0m')
+
+    def print(self, message: str, line_number: Optional[int] = None, level: Optional[MESSAGE_TYPE] = None) -> None:
+        """ Print the given message with its line number and optional formating given the level
+
+        :param message: Message to show
+        :param line_number: Line Number to show
+        :param level: Level of the message
+        """
+        self.static_print(message, line_number=line_number, level=level)
 
     def _test_lemma(self, lem=None, morph=None, pos=None, line_no=0) -> _Ret:
         """
@@ -471,6 +492,7 @@ class Test:
             self.print("Status:\tPassed", level=MESSAGE_TYPE.OK)
             return True
 
+
 @click.command()
 # Notre CLI a besoin de deux fichiers pour fonctionner, un de règle, un à contrôler.
 # Les fichiers sont ouverts par Click
@@ -487,7 +509,7 @@ def test(control_file, tested_file, from_=0, to_=0):
     :param tested_file: File that needs to be tested
     :return: True if full success, False if one fails. None is returned when things go wrong
     """
-    running = Test(control_file)
+    running = Test.from_file_io(control_file)
     return running.test(tested_file, from_=from_, to_=to_)
 
 
