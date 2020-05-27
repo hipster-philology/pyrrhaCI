@@ -198,8 +198,6 @@ class PyrrhaCI:
             with open(_relative_path(config_file.name, config.get("allowed_pos"))) as open_file:
                 allowed_pos = set(open_file.read().strip().split(","))
 
-        print(expected_columns)
-
         return cls(
             expected_columns=expected_columns,
             allowed_lemma=allowed_lemma,
