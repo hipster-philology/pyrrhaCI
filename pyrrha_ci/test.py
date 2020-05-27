@@ -1,4 +1,4 @@
-from .code import PyrrhaCI, Rule, _Ret
+from pyrrha_ci.code import PyrrhaCI, Rule, _Ret
 from unittest import TestCase
 
 
