@@ -120,14 +120,14 @@ def _relative_path(first_file: str, second_file: str):
     )
 
 
-class Test:
+class PyrrhaCI:
     """ A Test class that handles reading of data and is called by the main command
 
     :param config_file: Address of the file that loads the configuration
     """
 
     @classmethod
-    def from_file_io(cls, config_file: TextIO) -> "Test":
+    def from_file_io(cls, config_file: TextIO) -> "PyrrhaCI":
         # Nous ouvrons et stockons le contenu du fichier YAML
         config = yaml.safe_load(config_file)
 
@@ -509,7 +509,7 @@ def test(control_file, tested_file, from_=0, to_=0):
     :param tested_file: File that needs to be tested
     :return: True if full success, False if one fails. None is returned when things go wrong
     """
-    running = Test.from_file_io(control_file)
+    running = PyrrhaCI.from_file_io(control_file)
     return running.test(tested_file, from_=from_, to_=to_)
 
 
