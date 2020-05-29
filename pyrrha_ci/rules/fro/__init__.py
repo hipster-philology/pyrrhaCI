@@ -175,7 +175,7 @@ class VerbalInf(RuleStatic):
         False
 
         """
-        if line["POS"] in ["VERinf"]:
+        if line["POS"] == ["VERinf"]:
             return True
 
     @staticmethod
