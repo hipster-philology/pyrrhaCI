@@ -46,6 +46,7 @@ def merge(source, destination):
             merge(value, node)
         else:
             destination[key] = value
+    return destination
 
 
 def _relative_path(first_file: str, second_file: str):
