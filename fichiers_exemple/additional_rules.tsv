@@ -1,3 +1,10 @@
 Index	Type	CATin	CATout	VALin	VALout
 1	allowed_only	POS  	MORPH   	CONcoo  	MORPH=empty
 2	forbidden	POS 	MORPH 	PROind 	PERS\.=
+
+
+
+si token=('le', 'la', "l'", 'les') and ( lemme!= il or pos!=PROper) and following token pos = VERcjg)
+
+le|la|l'|les -> [lemme] != il
+

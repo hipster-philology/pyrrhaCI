@@ -1,5 +1,6 @@
+lemma	POS
 (s)podïen
-a1
+a1	CONsub
 a2
 a3
 a3+le

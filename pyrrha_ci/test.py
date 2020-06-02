@@ -1,4 +1,5 @@
-from pyrrha_ci.code import PyrrhaCI, Rule, _Ret
+from pyrrha_ci.code import PyrrhaCI, _Ret
+from pyrrha_ci.rules.dynamic_rules import ManualRule
 from unittest import TestCase
 
 
