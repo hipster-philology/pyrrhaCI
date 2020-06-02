@@ -445,7 +445,8 @@ class PyrrhaCI:
                 for rule in self.rules:
                     if rule.applies_to(line_as_dict):
                         if rule.check(line_as_dict, previous=previous, following=nextious):
-                            self.static_print(rule.MESSAGE, line_number=cur_line_friendly, level=rule.TYPE)
+                            self.static_print(rule.MESSAGE.format(**line_as_dict),
+                                              line_number=cur_line_friendly, level=rule.TYPE)
 
         if errors > 0:
             self.print("\n\n----------------\n\n")
