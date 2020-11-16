@@ -100,10 +100,11 @@ class PyrrhaCI:
         cross_check_lemma = False
         if config.get("allowed_lemma"):
             for _, data in parse_tsv(_relative_path(config_file.name, config["allowed_lemma"])):
-                allowed_lemma[data["lemma"]] = set()
+                if data["lemma"] not in allowed_lemma:
+                    allowed_lemma[data["lemma"]] = set()
                 if "POS" in data and data["POS"]:
                     cross_check_lemma = True
-                    allowed_lemma[data["lemma"]] = set(data["POS"].split(","))
+                    allowed_lemma[data["lemma"]] |= set(data["POS"].split(","))
 
         # Ouverture et lecture du fichier morph.tsv avec délimiteur tsv : \t et encapsulateur ''.
         allowed_morph: Dict[str, List[str]] = {}
@@ -111,10 +112,11 @@ class PyrrhaCI:
         if config.get("allowed_morph"):
             for row_num, row in parse_tsv(_relative_path(config_file.name, config.get("allowed_morph"))):
                 morph = row["morph"]
+                _morph_pos = row.get("POS", "").split(",") if row.get("POS") else []
                 if morph in allowed_morph:
-                    allowed_morph[morph].extend(row.get("POS", "").split(","))
+                    allowed_morph[morph].extend(_morph_pos)
                 else:
-                    allowed_morph[morph] = row.get("POS", "").split(",")
+                    allowed_morph[morph] = _morph_pos
                 if len(allowed_morph[morph]):
                     cross_check_morph = True
 
