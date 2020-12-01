@@ -228,6 +228,12 @@ class PyrrhaCI:
 
         :returns: Nb Error, Has Failed, Was Checked, Was Ignored
         """
+        if not lem:
+            self.print(
+                "Lemme absent ligne ({})".format(line_no),
+                line_number=line_no, level=MESSAGE_TYPE.IGNORE
+            )
+            return _Ret(errors=1, failed=True, checked=True, ignored=False)
         if not self.allowed_lemma:
             return _Ret(errors=0, failed=False, checked=False, ignored=False)
         elif lem in self.allowed_lemma:
