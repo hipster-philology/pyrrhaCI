@@ -1,89 +1,22 @@
 # -*- coding: utf-8 -*-
 
 # nous importons les librairies nécessaires à l'exécution du code.
-import os
-import csv
 import regex as re
 import yaml
 import click
-from enum import Enum
-from typing import List, Optional, TextIO, Dict, Generator, Tuple, Set, Union, Any
+
+from .rules.dynamic_rules import ManualRule
+from .utils import MESSAGE_TYPE, parse_tsv, merge, _relative_path
+from .rules.proto import Rule
+from typing import List, Optional, TextIO, Dict, Tuple, Set, Any
 from collections import namedtuple
+from importlib import import_module
 
 _Ret = namedtuple("Ret", ["errors", "failed", "checked", "ignored"])
 Numb = re.compile("^\d+$")
 Punc = re.compile("^\W+$")
 
-
-class MESSAGE_TYPE(Enum):
-    INFO = '\033[94m'
-    OK = '\033[92m'
-    WARNING = '\033[93m'
-    FAIL = '\033[91m'
-    IGNORE = '\033[94m'
-
-
 semi_colon_split = re.compile(r"(?<!\\):")
-
-
-def parse_tsv(content: Union[str, TextIO]) -> Generator[Tuple[int, Dict[str, str]], None, None]:
-    """ Parses a Pyrrha TSV
-
-    :param content: Path to the file
-    :yield: Yields the line number and the content
-    """
-    if isinstance(content, str):
-        content = open(content)
-    header = []
-    for line_no, line in enumerate(content):
-        if line_no == 0:
-            header = line.strip().split("\t")
-        else:
-            yield line_no, dict(zip(header, line.strip().split("\t")))
-    content.close()
-    return None
-
-
-def merge(source, destination):
-    """Merges b into a
-
-    Source: https://stackoverflow.com/questions/20656135/python-deep-merge-dictionary-data
-
-    >>> a = { 'first' : { 'all_rows' : { 'pass' : 'dog', 'number' : '1' } } }
-    >>> b = { 'first' : { 'all_rows' : { 'fail' : 'cat', 'number' : '5' } } }
-    >>> merge(b, a) == { 'first' : { 'all_rows' : { 'pass' : 'dog', 'fail' : 'cat', 'number' : '5' } } }
-    True
-    """
-    for key, value in source.items():
-        if isinstance(value, dict):
-            # get node or create one
-            node = destination.setdefault(key, {})
-            merge(value, node)
-        else:
-            destination[key] = value
-
-
-# Nous définissons une classe pour les règles additionnelles que nous nommons Rule.
-# La définition d'une classe permet de transmettre des propriétés aux objets qui héritent de cette classe.
-# Nous l'utilisons pour ne pas avoir à utiliser l'indexation dans la boucle.
-class Rule:
-    """ Rule that needs to be respected by each line
-
-    :param regle: List of 5 elements : Rule Type, Category First value, Category Second Value, First Value, Controlled
-    Value
-
-    Maybe conditional value/category // controlled value/category
-    """
-
-    # les 2 arguments de la méthode sont self (par convention) et regle qui correspond à chaque colonne du fichier.
-    def __init__(self, regle: List[str]):
-        """ Setup the class """
-        self.id = regle[0]
-        self.ruleType = regle[1]
-        self.catIn = regle[2]
-        self.catOut = regle[3]
-        self.valIn = re.compile(regle[4])
-        self.valOut = re.compile(regle[5])
 
 
 # Nous définissons une classe pour les règles à ignorer indiquées dans le fichier config.yml.
@@ -107,18 +40,6 @@ class Ignore:
             self.token = int(self.token)
         self.commentaire = ign[2]
 
-# L'utilisation de class améliore la lisibilité du code. Nous avons ainsi un namespace (?)
-#   local qui décrit les attributs.
-
-
-def _relative_path(first_file: str, second_file: str):
-    """ Compute a relative path based on the path of the first
-    file """
-    return os.path.join(
-        os.path.dirname(first_file),
-        second_file
-    )
-
 
 class PyrrhaCI:
     """ A Test class that handles reading of data and is called by the main command
@@ -136,17 +57,17 @@ class PyrrhaCI:
         # Si le fichier de config n'est pas constitué d'un des trois fichiers de base le code s'arrête.
         if "allowed_lemma" not in config:
             cls.static_print("Ce CLI n'a pas trouvé de fichier pour les lemmes autorisés",
-                       level=MESSAGE_TYPE.INFO)
+                             level=MESSAGE_TYPE.INFO)
         else:
             expected_columns.append("lemma")
         if "allowed_pos" not in config:
             cls.static_print("Ce CLI n'a pas trouvé de fichier pour les POS autorisées",
-                       level=MESSAGE_TYPE.INFO)
+                             level=MESSAGE_TYPE.INFO)
         else:
             expected_columns.append("POS")
         if "allowed_morph" not in config:
             cls.static_print("Ce CLI n'a pas trouvé de fichier pour les tags de morphologies autorisés",
-                       level=MESSAGE_TYPE.INFO)
+                             level=MESSAGE_TYPE.INFO)
         else:
             expected_columns.append("morph")
 
@@ -160,7 +81,7 @@ class PyrrhaCI:
         else:
             cls.static_print("Vous n'avez pas d'ignore enregistré", level=MESSAGE_TYPE.INFO)
 
-        allowed_rules: List[Rule] = []
+        allowed_rules: List[ManualRule] = []
         if "additional_rules" in config:
             # Ouverture et lecture du fichier additional_rules avec le délimiteur de colonne tsv \t et encapsulateur '',
             # s'il existe.
@@ -170,27 +91,34 @@ class PyrrhaCI:
                     cls.static_print("Votre fichier additionnal_rules est mal formé", level=MESSAGE_TYPE.FAIL)
                 # Sinon, on ajoute à la liste les éléments auquel on donne la classe Rule.
                 else:
-                    allowed_rules.append(Rule(regle))
+                    allowed_rules.append(ManualRule(regle))
         else:
             cls.static_print("Vous n'avez pas de règles additionnelles enregistrées", level=MESSAGE_TYPE.INFO)
 
         # Ouverture et lecture du fichier lemma.txt, stockage du texte dans la variable lemme.
         allowed_lemma = {}
+        cross_check_lemma = False
         if config.get("allowed_lemma"):
             for _, data in parse_tsv(_relative_path(config_file.name, config["allowed_lemma"])):
-                allowed_lemma[data["lemma"]] = set()
-                if "POS" in data:
-                    allowed_lemma[data["lemma"]] = set(data["POS"].split(","))
+                if data["lemma"] not in allowed_lemma:
+                    allowed_lemma[data["lemma"]] = set()
+                if "POS" in data and data["POS"]:
+                    cross_check_lemma = True
+                    allowed_lemma[data["lemma"]] |= set(data["POS"].split(","))
 
         # Ouverture et lecture du fichier morph.tsv avec délimiteur tsv : \t et encapsulateur ''.
         allowed_morph: Dict[str, List[str]] = {}
+        cross_check_morph = False
         if config.get("allowed_morph"):
             for row_num, row in parse_tsv(_relative_path(config_file.name, config.get("allowed_morph"))):
                 morph = row["morph"]
+                _morph_pos = row.get("POS", "").split(",") if row.get("POS") else []
                 if morph in allowed_morph:
-                    allowed_morph[morph].extend(row.get("POS", "").split(","))
+                    allowed_morph[morph].extend(_morph_pos)
                 else:
-                    allowed_morph[morph] = row.get("POS", "").split(",")
+                    allowed_morph[morph] = _morph_pos
+                if len(allowed_morph[morph]):
+                    cross_check_morph = True
 
         # ouverture et lecture du fichier POS, stockage du texte dans la variable pos.
         allowed_pos = None
@@ -206,7 +134,10 @@ class PyrrhaCI:
             ignore=ignore,
             allowed_rules=allowed_rules,
             mapping=config.get("mapping", {}),
-            options=config.get("options", {})
+            options=config.get("options", {}),
+            ruleset=config.get("ruleset", None),
+            cross_check_lemma=cross_check_lemma,
+            cross_check_morph=cross_check_morph
         )
 
     def __init__(
@@ -215,16 +146,34 @@ class PyrrhaCI:
             allowed_lemma: Optional[Dict[str, Set[str]]] = None,
             allowed_pos: Optional[List[str]] = None,
             allowed_morph: Optional[Dict[str, List[str]]] = None,
-            allowed_rules: Optional[List[Rule]] = None,
+            allowed_rules: Optional[List[ManualRule]] = None,
             ignore: Optional[Dict[str, Dict[str, Ignore]]] = None,
             mapping: Optional[Dict[str, Dict[str, str]]] = None,
-            options: Optional[Dict[str, Any]] = None
+            options: Optional[Dict[str, Any]] = None,
+            cross_check_lemma: bool = False,
+            cross_check_morph: bool = False,
+            ruleset: Optional[str] = None
     ):
+        """
+
+        :param expected_columns: Columns expected in the file
+        :param allowed_lemma: Dictionary of allowed lemma, with allowed POS for each lemma [Optional second part]
+        :param allowed_morph: Dictionary of allowed morph with allowed POS for each morph [Optional second part]
+        :param allowed_pos: Set of allowed POS
+        :param ignore: Information to ignore
+        :param mapping: For each category (morph, lemma, pos), a dictionary key->value where key in the tested file
+                        is replaced by value. Example: `{"POS": {"VERaux": "VER"}}` will replace VERaux by VER.
+        :param options: Available options (allow_punc, allow_numb, ignore_on_POS)
+        :param ruleset: List of rules to use
+        """
         self.expected_columns: List[str] = expected_columns
         self.allowed_lemma: Dict[str, Set[str]] = allowed_lemma or {}
         self.allowed_morph: Dict[str, List[str]] = allowed_morph or {}
         self.allowed_pos: Set[str] = allowed_pos or set()
-        self.allowed_rules: List[Rule] = allowed_rules or []
+        self.allowed_rules: List[ManualRule] = allowed_rules or []
+
+        self.cross_check_lemma: bool = cross_check_lemma
+        self.cross_check_morph: bool = cross_check_morph
 
         self.ignored: Dict[str, Dict[str, Ignore]] = {category: {} for category in self.expected_columns}
         merge(ignore or {}, self.ignored)
@@ -240,6 +189,14 @@ class PyrrhaCI:
                     "ignore_on_POS": []
                 }
         }
+        self.ruleset: Optional[str] = ruleset
+        self.rules: List[Rule] = []
+        try:
+            if ruleset:
+                self.rules = import_module("pyrrha_ci.rules.{}.import".format(ruleset)).Rules
+        except ImportError:
+            print("The ruleset you tried to import ({}) seems to not exist.".format(ruleset))
+            raise
         merge(options or {}, self.options)
 
     @staticmethod
@@ -271,6 +228,12 @@ class PyrrhaCI:
 
         :returns: Nb Error, Has Failed, Was Checked, Was Ignored
         """
+        if not lem:
+            self.print(
+                "Lemme absent ligne ({})".format(line_no),
+                line_number=line_no, level=MESSAGE_TYPE.IGNORE
+            )
+            return _Ret(errors=1, failed=True, checked=True, ignored=False)
         if not self.allowed_lemma:
             return _Ret(errors=0, failed=False, checked=False, ignored=False)
         elif lem in self.allowed_lemma:
@@ -389,7 +352,7 @@ class PyrrhaCI:
         return errors
 
     def _test_cross_lemma_pos(self, lem, pos, form, line_no=0) -> int:
-        if self.allowed_lemma[lem] and pos not in self.allowed_lemma[lem]:
+        if len(self.allowed_lemma[lem]) and pos not in self.allowed_lemma[lem]:
             self.print(
                 "La POS `{}` n'est pas autorisée avec le lemme `{}` (Token `{}`). Autorisées: `{}`".format(
                     pos, lem, form, ",".join(self.allowed_lemma[lem])
@@ -400,7 +363,7 @@ class PyrrhaCI:
         return 0
 
     def _test_cross_pos_morph(self, pos, morph, form, line_no=0) -> int:
-        if pos not in self.allowed_morph[morph]:
+        if len(self.allowed_morph[morph]) and pos not in self.allowed_morph[morph]:
             self.print(
                 "La morph `{}` n'est pas  autorisée avec la POS `{}` (Token `{}`)".format(
                     morph, pos, form
@@ -410,7 +373,9 @@ class PyrrhaCI:
             return 1
         return 0
 
-    def _get_values(self, row) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    def _get_values(self, row) -> Tuple[
+        Optional[str], Optional[str], Optional[str], Optional[str], Dict[str, Optional[str]]
+    ]:
         lem = row.get("lemma")
         if lem and lem in self.mapping["lemma"]:
             lem = self.mapping["morph"][lem]
@@ -421,12 +386,14 @@ class PyrrhaCI:
         if morph and morph in self.mapping["morph"]:
             morph = self.mapping["morph"][morph]
         form = row.get("token", row.get("form"))
-        return form, lem, pos, morph
+        return form, lem, pos, morph, {"token": form, "lemma": lem, "POS": pos, "morph": morph}
 
     def test(self, control_file: TextIO, from_=0, to_=0):
         """ Test the file against the loaded rules
 
         :param control_file: File to test
+        :param from_: Line to start with
+        :param to_: Line to end with
         :return:
         """
 
@@ -441,16 +408,17 @@ class PyrrhaCI:
 
         # nous créons une boucle qui compare les annotations aux formes autorisées par les 3 fichiers de configuration,
         # les règles d'ignore et les additional_rules et qui vérifie si les lignes sont bien autorisées.
-        for row_num, row in parse_tsv(control_file):
+        iterator = list([(row_num, self._get_values(row)) for row_num, row in parse_tsv(control_file)])
+        max_row = len(iterator)
+
+        for row_num, (form, lem, pos, morph, line_as_dict) in iterator:
             if from_ is not None and row_num < from_:
                 continue
             elif to_ is not None and row_num > to_:
                 continue
 
-            # On vérifie que le fichier a au moins les colonnes attendues
-            if len(row) < len(self.expected_columns):
-                self.print("Votre fichier à contrôler est mal formé", level=MESSAGE_TYPE.FAIL)
-                return
+            previous = [row[-1] for _, row in iterator[max(0, row_num-5):row_num]]
+            nextious = [row[-1] for _, row in iterator[row_num+1:min(max_row, row_num+5)]]
 
             cur_line_friendly = row_num + 1
             line_count += 1
@@ -458,27 +426,35 @@ class PyrrhaCI:
             # Pour les lignes qui ne sont pas dans le ignore, le parsage continue et
             #   le système vérifie que les annotations soient bien dans les fichiers correspondants.
             if cur_line_friendly not in ligne_traite:
-                form, lem, pos, morph = self._get_values(row)
-
                 lem_status = self._test_lemma(lem=lem, pos=pos, morph=morph, line_no=cur_line_friendly)
                 errors += lem_status.errors
 
                 pos_status = self._test_pos(lem=lem, pos=pos, morph=morph, line_no=cur_line_friendly)
                 errors += pos_status.errors
 
-                if lem_status.checked and pos_status.checked and not lem_status.ignored and not pos_status.ignored\
+                if self.cross_check_lemma and\
+                        lem_status.checked and pos_status.checked and not lem_status.ignored and not pos_status.ignored\
                         and not lem_status.failed and not pos_status.failed:
                     errors += self._test_cross_lemma_pos(lem, pos, form=form, line_no=cur_line_friendly)
 
                 morph_status = self._test_morph(lem=lem, pos=pos, morph=morph, line_no=cur_line_friendly)
                 errors += morph_status.errors
 
-                if morph_status.checked and pos_status.checked and not morph_status.ignored and not pos_status.ignored\
+                if self.cross_check_morph and\
+                        morph_status.checked and pos_status.checked and not morph_status.ignored \
+                        and not pos_status.ignored\
                         and not morph_status.failed and not pos_status.failed:
                     errors += self._test_cross_pos_morph(pos, morph, form=form, line_no=cur_line_friendly)
 
                 # on parse ensuite les additional_rules.
-                errors += self._test_additional_rules(row)
+                errors += self._test_additional_rules(line_as_dict)
+
+                # Test avec le ruleset
+                for rule in self.rules:
+                    if rule.applies_to(line_as_dict):
+                        if rule.check(line_as_dict, previous=previous, following=nextious):
+                            self.static_print(rule.MESSAGE.format(**line_as_dict),
+                                              line_number=cur_line_friendly, level=rule.TYPE)
 
         if errors > 0:
             self.print("\n\n----------------\n\n")

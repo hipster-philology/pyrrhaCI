@@ -1,4 +1,4 @@
-label	readable
+morph	readable	POS
 MODE=con|PERS.=1|NOMB.=p	conditionnel 1re personne pluriel
 MODE=con|PERS.=1|NOMB.=s	conditionnel 1re personne singulier
 MODE=con|PERS.=2|NOMB.=p	conditionnel 2e personne pluriel
