@@ -23,7 +23,7 @@ def parse_tsv(content: Union[str, TextIO]) -> Generator[Tuple[int, Dict[str, str
     for line_no, line in enumerate(content):
         if line_no == 0:
             header = line.strip().split("\t")
-        else:
+        elif line.strip():
             yield line_no, dict(zip(header, line.strip().split("\t")))
     content.close()
     return None
