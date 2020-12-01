@@ -5,8 +5,8 @@ import regex as re
 import yaml
 import click
 
-from pyrrha_ci.rules.dynamic_rules import ManualRule
-from pyrrha_ci.utils import MESSAGE_TYPE, parse_tsv, merge, _relative_path
+from .rules.dynamic_rules import ManualRule
+from .utils import MESSAGE_TYPE, parse_tsv, merge, _relative_path
 from .rules.proto import Rule
 from typing import List, Optional, TextIO, Dict, Tuple, Set, Any
 from collections import namedtuple
